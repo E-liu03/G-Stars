@@ -61,3 +61,5 @@ Cloth in blender - https://www.youtube.com/watch?v=IYdfMqRIfMA
 Shrine - https://www.youtube.com/watch?v=t5cGdv57y6I
 Rain Animation in unreal - https://www.youtube.com/watch?v=8N8EOkj0pK8
 How to make cinematic scenes in unreal - https://www.youtube.com/watch?v=CW8hDvJOwGM
+Vending Machine - https://www.youtube.com/watch?v=BzTN2yTgTj0&t=714s
+Billboard - https://www.youtube.com/watch?v=Fbve035X7iA
