@@ -27,7 +27,7 @@ Group Members
 
 Ethan Liu - H00372182
 Hamdaan Ismail - H00350285
-Yousef Shehata - [Student ID]
+Youssef Shehata - H00364069
 
 
 Repository Structure
@@ -38,12 +38,16 @@ This repository contains three main deliverables:
 \GitHub\G-Stars\D1 - Render4
 
 High-quality offline rendered images of individual objects and the complete diorama scene created in Blender. Includes modeling process, materials, textures, and lighting setup.
+
+
+
 Animation/
 \GitHub\G-Stars\D1 - Render-Shibuya-Diorama.blend  (Click File, External Data, Find Missing files To load Textures)
 
-Animated video sequence exported to Unreal Engine, featuring camera fly-throughs and object animations that bring the Shibuya crossing to life.
 Interactive/
+https://drive.google.com/file/d/1-RLNoflehFYEenedOVM1qzQCXf-Y7JeN/view?usp=sharing
 
+Animated video sequence exported to Unreal Engine, featuring camera fly-throughs and object animations that bring the Shibuya crossing to life.
 
 References 
 
