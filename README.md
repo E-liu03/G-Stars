@@ -1,6 +1,18 @@
 # G-Stars
 Computer Graphics
 
+Video Demonstrations Here:
+
+Google Drive to Videos: https://drive.google.com/drive/folders/1Qi7ZZ-xvgUZXWyzXZLzs4pqvKkBpvEQ-?usp=sharing
+
+Unlisted Youtube Videos:
+
+Render: https://youtu.be/hEGu0rlUdEU
+
+Animation: https://youtu.be/2x5HZUm9IOc
+
+We could not upload the zip folder of the demonstrations as normal. Sorry for the inconvenience.
+
 Shibuya - A 3D Diorama Project
 F20GA Computer Graphics
 A miniature recreation of Tokyo's iconic Shibuya Crossing, complete with cherry blossoms, traditional elements, and urban atmosphere.
