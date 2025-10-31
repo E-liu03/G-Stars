@@ -25,7 +25,7 @@ The diorama blends traditional Japanese culture with contemporary Tokyo street l
 
 Group Members
 
-Ethan Liu - [Student ID]
+Ethan Liu - H00372182
 Hamdaan Ismail - H00350285
 Yousef Shehata - [Student ID]
 
