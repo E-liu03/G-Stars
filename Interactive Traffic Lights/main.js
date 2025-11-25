@@ -126,6 +126,13 @@ function detectTrafficLightType(matName, hasTexture) {
   return null;
 }
 
+// ============== VENDING MACHINE BUTTON DETECTION ================
+const vendingButtonMaterials = new Set(['material.042',]);
+
+function isVendingButtonMaterial(matName){
+  return vendingButtonMaterials.has(matName);
+}
+
 // ============== OBJ LOADER ==============
 async function loadOBJ(device, objUrl, mtlUrl) {
   const materials = await loadMTL(mtlUrl);
@@ -278,6 +285,12 @@ async function loadOBJ(device, objUrl, mtlUrl) {
       trafficLightCount[lightType]++;
       console.log(`🚦 Traffic light (${lightType}): "${matName}" - color: [${color.map(c => c.toFixed(2)).join(', ')}]`);
     }
+
+    //Detect vending machine button
+    const isVendingButton = isVendingButtonMaterial(matName);
+    if(isVendingButton){
+      console.log(`🧃 Vending button material: "${matName}"`);
+    }
     
     const data = new Float32Array(group.vertices);
     const buffer = device.createBuffer({
@@ -294,6 +307,9 @@ async function loadOBJ(device, objUrl, mtlUrl) {
       name: matName,
       trafficLight: lightType,
       baseColor: color,
+      isVendingButton,
+      flickerTimer: Math.random()*0.3,
+      flickerState: Math.random() > 0.5 ? 1 : 0,
     });
   }
   
@@ -600,6 +616,16 @@ async function main() {
         } else if (mesh.trafficLight === 'green') {
           emissive = lightState.green;
         }
+      }
+
+      if(mesh.isVendingButton){
+        emissiveFlag = 1;
+        mesh.flickerTimer -= dt;
+        if(mesh.flickerTimer <= 0){
+          mesh.flickerState = mesh.flickerState ? 0 : 1;
+          mesh.flickerTimer = 0.05 + Math.random()*0.25;
+        }
+        emissive = Math.max(emissive, mesh.flickerState);
       }
       
       uniforms.set([emissive, isTrafficLight, 0, 0], 44);
