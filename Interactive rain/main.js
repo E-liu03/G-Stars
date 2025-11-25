@@ -1,4 +1,4 @@
-// main.js -- WebGPU OBJ Loader with Textures and Animated Traffic Lights
+// main.js -- WebGPU OBJ Loader with Textures, Traffic Lights, and Rain
 
 // ============== TEXTURE LOADER ==============
 async function loadTexture(device, url) {
@@ -100,25 +100,19 @@ async function loadMTL(url) {
 }
 
 // ============== TRAFFIC LIGHT DETECTION ==============
-// Use exact material names to identify traffic lights
 function detectTrafficLightType(matName, hasTexture) {
-  // Skip textured materials
   if (hasTexture) {
     return null;
   }
   
-  // Match by exact material name
-  // GREEN traffic light
   if (matName === 'Material.003') {
     return 'green';
   }
   
-  // YELLOW/AMBER traffic light (Material.004 is amber-colored)
   if (matName === 'Material.004') {
     return 'yellow';
   }
   
-  // RED traffic light - Material.006 has red color [0.80, 0.00, 0.00]
   if (matName === 'Material.006') {
     return 'red';
   }
@@ -137,6 +131,7 @@ async function loadOBJ(device, objUrl, mtlUrl) {
     'japanese writing blank.png': 'textures/Japanese Writing Blank.png',
     'flag_of_japan.svg.png': 'textures/Flag_of_Japan.png',
     'flag_of_japan.png': 'textures/Flag_of_Japan.png',
+    'stainless steel.jpeg': 'textures/stainless steel.jpeg',
   };
   
   const loadedTextures = {};
@@ -270,13 +265,12 @@ async function loadOBJ(device, objUrl, mtlUrl) {
       }
     }
     
-    // Detect traffic light by material name
     const color = mat ? mat.Kd : defaultColor;
     const lightType = detectTrafficLightType(matName, hasTexture);
     
     if (lightType) {
       trafficLightCount[lightType]++;
-      console.log(`🚦 Traffic light (${lightType}): "${matName}" - color: [${color.map(c => c.toFixed(2)).join(', ')}]`);
+      console.log(`🚦 Traffic light (${lightType}): "${matName}"`);
     }
     
     const data = new Float32Array(group.vertices);
@@ -299,13 +293,74 @@ async function loadOBJ(device, objUrl, mtlUrl) {
   
   console.log(`🚦 Traffic lights found:`, trafficLightCount);
   
-  // If no traffic lights found, print all material names for debugging
-  if (trafficLightCount.red === 0 && trafficLightCount.yellow === 0 && trafficLightCount.green === 0) {
-    console.log("⚠️ No traffic lights detected! Material names in scene:");
-    meshes.forEach(m => console.log(`  - "${m.name}"`));
+  return { meshes, sampler, whiteTexture };
+}
+
+// ============== RAIN SYSTEM ==============
+function createRainSystem(device, numDrops = 1200) {
+  const drops = [];
+  const areaSizeX = 1.5; // Wider coverage
+  const areaSizeZ = 1.5; // Depth coverage
+  const heightMin = -0.5;
+  const heightMax = 2.5;
+  
+  // Offset to shift rain position (adjust these to move the rain)
+  const offsetX = -0.5;  // Positive = right, Negative = left
+  const offsetZ = 0.8;  // Positive = forward, Negative = back
+  
+  // Initialize rain drops
+  for (let i = 0; i < numDrops; i++) {
+    drops.push({
+      x: (Math.random() - 0.5) * areaSizeX * 2 + offsetX,
+      y: Math.random() * (heightMax - heightMin) + heightMin,
+      z: (Math.random() - 0.5) * areaSizeZ * 2 + offsetZ,
+      speed: 2.5 + Math.random() * 1.5,
+      length: 0.04 + Math.random() * 0.05,
+    });
   }
   
-  return { meshes, sampler, whiteTexture };
+  const vertexData = new Float32Array(numDrops * 2 * 4);
+  
+  const buffer = device.createBuffer({
+    size: vertexData.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+  });
+  
+  return { drops, buffer, numDrops, areaSizeX, areaSizeZ, heightMin, heightMax, offsetX, offsetZ };
+}
+
+function updateRain(rain, dt) {
+  for (const drop of rain.drops) {
+    drop.y -= drop.speed * dt;
+    
+    // Reset drop when it falls below ground
+    if (drop.y < rain.heightMin) {
+      drop.y = rain.heightMax;
+      drop.x = (Math.random() - 0.5) * rain.areaSizeX * 2 + rain.offsetX;
+      drop.z = (Math.random() - 0.5) * rain.areaSizeZ * 2 + rain.offsetZ;
+    }
+  }
+}
+
+function updateRainBuffer(device, rain) {
+  const data = new Float32Array(rain.numDrops * 2 * 4);
+  let idx = 0;
+  
+  for (const drop of rain.drops) {
+    // Top of rain streak
+    data[idx++] = drop.x;
+    data[idx++] = drop.y;
+    data[idx++] = drop.z;
+    data[idx++] = 0.6; // Alpha
+    
+    // Bottom of rain streak
+    data[idx++] = drop.x;
+    data[idx++] = drop.y - drop.length;
+    data[idx++] = drop.z;
+    data[idx++] = 0.0; // Fade out at bottom
+  }
+  
+  device.queue.writeBuffer(rain.buffer, 0, data);
 }
 
 // ============== MAIN ==============
@@ -324,7 +379,7 @@ async function main() {
   const format = navigator.gpu.getPreferredCanvasFormat();
   context.configure({ device, format, alphaMode: "opaque" });
 
-  // Shader with emissive support for traffic lights
+  // Main scene shader
   const shaderModule = device.createShaderModule({
     code: `
       struct Uniforms {
@@ -371,7 +426,6 @@ async function main() {
           baseColor = texColor.rgb;
         }
         
-        // Check if this is a traffic light (emissive.y = 1.0 means it's a traffic light)
         let isTrafficLight = u.emissive.y > 0.5;
         let emissiveStrength = u.emissive.x;
         
@@ -379,14 +433,11 @@ async function main() {
         
         if (isTrafficLight) {
           if (emissiveStrength > 0.5) {
-            // Light is ON - bright glow
             lit = baseColor * 2.5 + vec3(0.3);
           } else {
-            // Light is OFF - dim
             lit = baseColor * 0.15;
           }
         } else {
-          // Normal lighting for non-traffic-light objects
           let ambient = 0.3;
           let diffuse = max(dot(N, L), 0.0) * 0.55;
           let specular = pow(max(dot(N, H), 0.0), 32.0) * 0.1;
@@ -400,6 +451,36 @@ async function main() {
     `,
   });
 
+  // Rain shader
+  const rainShaderModule = device.createShaderModule({
+    code: `
+      struct RainUniforms {
+        mvp : mat4x4<f32>,
+      };
+      @group(0) @binding(0) var<uniform> u : RainUniforms;
+
+      struct VSOut {
+        @builtin(position) pos : vec4<f32>,
+        @location(0) alpha : f32,
+      };
+
+      @vertex
+      fn vs(@location(0) pos : vec3<f32>, @location(1) alpha : f32) -> VSOut {
+        var out : VSOut;
+        out.pos = u.mvp * vec4(pos, 1.0);
+        out.alpha = alpha;
+        return out;
+      }
+
+      @fragment
+      fn fs(@location(0) alpha : f32) -> @location(0) vec4<f32> {
+        // Light blue rain color with fade
+        return vec4(0.7, 0.8, 1.0, alpha * 0.5);
+      }
+    `,
+  });
+
+  // Main scene bind group layout and pipeline
   const bindGroupLayout = device.createBindGroupLayout({
     entries: [
       { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
@@ -436,6 +517,66 @@ async function main() {
     },
   });
 
+  // Rain bind group layout and pipeline
+  const rainBindGroupLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+    ],
+  });
+
+  const rainPipeline = device.createRenderPipeline({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [rainBindGroupLayout] }),
+    vertex: {
+      module: rainShaderModule,
+      entryPoint: "vs",
+      buffers: [{
+        arrayStride: 16, // x, y, z, alpha
+        attributes: [
+          { shaderLocation: 0, offset: 0, format: "float32x3" },
+          { shaderLocation: 1, offset: 12, format: "float32" },
+        ],
+      }],
+    },
+    fragment: {
+      module: rainShaderModule,
+      entryPoint: "fs",
+      targets: [{
+        format,
+        blend: {
+          color: {
+            srcFactor: 'src-alpha',
+            dstFactor: 'one-minus-src-alpha',
+            operation: 'add',
+          },
+          alpha: {
+            srcFactor: 'one',
+            dstFactor: 'one-minus-src-alpha',
+            operation: 'add',
+          },
+        },
+      }],
+    },
+    primitive: { topology: "line-list" },
+    depthStencil: {
+      format: "depth24plus",
+      depthWriteEnabled: false, // Don't write to depth buffer
+      depthCompare: "less",
+    },
+  });
+
+  // Rain uniform buffer
+  const rainUniformBuffer = device.createBuffer({
+    size: 64, // mat4x4
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+
+  const rainBindGroup = device.createBindGroup({
+    layout: rainBindGroupLayout,
+    entries: [
+      { binding: 0, resource: { buffer: rainUniformBuffer } },
+    ],
+  });
+
   const depthTexture = device.createTexture({
     size: [canvas.width, canvas.height],
     format: "depth24plus",
@@ -449,6 +590,10 @@ async function main() {
     console.error("Failed to load model!");
     return;
   }
+
+  // Create rain system
+  const rain = createRainSystem(device, 2000);
+  console.log("🌧️ Rain system created with", rain.numDrops, "drops");
 
   // Create uniform buffer and bind group for each mesh
   const meshData = model.meshes.map(mesh => {
@@ -501,10 +646,9 @@ async function main() {
   function normalize(v) { const l=Math.sqrt(dot(v,v)); return [v[0]/l,v[1]/l,v[2]/l]; }
 
   // Traffic light state
-  let trafficLightMode = 'auto'; // 'auto', 'green', 'yellow', 'red'
+  let trafficLightMode = 'auto';
   
   function getTrafficLightState(time) {
-    // Manual override
     if (trafficLightMode === 'green') {
       return { green: 1.0, yellow: 0.0, red: 0.0 };
     } else if (trafficLightMode === 'yellow') {
@@ -513,7 +657,6 @@ async function main() {
       return { green: 0.0, yellow: 0.0, red: 1.0 };
     }
     
-    // Auto cycle
     const cycleLength = 10;
     const t = time % cycleLength;
     
@@ -529,6 +672,8 @@ async function main() {
   }
 
   let camAngle = 0, camDist = 8, camHeight = 3, autoRotate = false;
+  let rainEnabled = true;
+  
   const keys = {};
   window.addEventListener('keydown', e => { 
     keys[e.key.toLowerCase()] = true; 
@@ -547,6 +692,12 @@ async function main() {
     } else if (e.key.toLowerCase() === 't') {
       trafficLightMode = 'auto';
       console.log('🚦 Traffic light: AUTO CYCLE');
+    }
+    
+    // Rain toggle
+    if (e.key.toLowerCase() === 'p') {
+      rainEnabled = !rainEnabled;
+      console.log(rainEnabled ? '🌧️ Rain: ON' : '☀️ Rain: OFF');
     }
   });
   window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
@@ -578,7 +729,14 @@ async function main() {
 
     const lightState = getTrafficLightState(totalTime);
 
-    // Update uniforms
+    // Update rain
+    if (rainEnabled) {
+      updateRain(rain, dt);
+      updateRainBuffer(device, rain);
+      device.queue.writeBuffer(rainUniformBuffer, 0, mvp);
+    }
+
+    // Update mesh uniforms
     for (const { mesh, uniformBuffer } of meshData) {
       const uniforms = new Float32Array(64);
       uniforms.set(mvp, 0);
@@ -587,7 +745,6 @@ async function main() {
       uniforms.set([camX, camY, camZ, 1], 36);
       uniforms.set([mesh.useTexture, 0, 0, 0], 40);
       
-      // Set emissive: x = brightness, y = isTrafficLight flag
       let emissive = 0;
       let isTrafficLight = 0;
       
@@ -611,7 +768,7 @@ async function main() {
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
         view: context.getCurrentTexture().createView(),
-        clearValue: { r:0.05, g:0.05, b:0.08, a:1 },
+        clearValue: rainEnabled ? { r:0.03, g:0.03, b:0.06, a:1 } : { r:0.05, g:0.05, b:0.08, a:1 },
         loadOp: "clear", storeOp: "store",
       }],
       depthStencilAttachment: {
@@ -621,12 +778,20 @@ async function main() {
       },
     });
 
+    // Draw scene
     pass.setPipeline(pipeline);
-    
     for (const { mesh, bindGroup } of meshData) {
       pass.setBindGroup(0, bindGroup);
       pass.setVertexBuffer(0, mesh.buffer);
       pass.draw(mesh.vertexCount);
+    }
+
+    // Draw rain
+    if (rainEnabled) {
+      pass.setPipeline(rainPipeline);
+      pass.setBindGroup(0, rainBindGroup);
+      pass.setVertexBuffer(0, rain.buffer);
+      pass.draw(rain.numDrops * 2);
     }
 
     pass.end();
@@ -639,10 +804,8 @@ async function main() {
   console.log("W/S or ↑/↓: Zoom in/out");
   console.log("Q/E: Move camera up/down");
   console.log("Space: Toggle auto-rotate");
-  console.log("🚦 G: Green light");
-  console.log("🚦 Y: Yellow light");
-  console.log("🚦 R: Red light");
-  console.log("🚦 T: Auto cycle");
+  console.log("🚦 G: Green light | Y: Yellow | R: Red | T: Auto");
+  console.log("🌧️ P: Toggle rain");
   
   requestAnimationFrame(frame);
 }
