@@ -137,6 +137,15 @@ function detectEmissiveType(matName, hasTexture) {
   return null;
 }
 
+// ============== NEON SIGN DETECTION ==============
+function detectNeonSign(matName, hasTexture) {
+  // Specific materials for neon signs
+  if (matName === 'Material.053' || matName === 'Material.009') {
+    return 'blue';
+  }
+  return null;
+}
+
 // ============== OBJ LOADER ==============
 async function loadOBJ(device, objUrl, mtlUrl) {
   const materials = await loadMTL(mtlUrl);
@@ -285,6 +294,7 @@ async function loadOBJ(device, objUrl, mtlUrl) {
     const color = mat ? mat.Kd : defaultColor;
     const lightType = detectTrafficLightType(matName, hasTexture);
     const emissiveType = detectEmissiveType(matName, hasTexture);
+    const neonSign = detectNeonSign(matName, hasTexture);
 
     if (lightType) {
       trafficLightCount[lightType]++;
@@ -293,6 +303,10 @@ async function loadOBJ(device, objUrl, mtlUrl) {
 
     if (emissiveType) {
       console.log(`💡 Emissive ${emissiveType}: "${matName}"`);
+    }
+
+    if (neonSign) {
+      console.log(`✨ Neon sign (${neonSign}): "${matName}"`);
     }
     
     const data = new Float32Array(group.vertices);
@@ -310,6 +324,7 @@ async function loadOBJ(device, objUrl, mtlUrl) {
       name: matName,
       trafficLight: lightType,
       emissiveType: emissiveType,
+      neonSign: neonSign,
       baseColor: color,
     });
   }
@@ -414,6 +429,7 @@ async function main() {
         emissive : vec4<f32>,
         time : vec4<f32>,
         lighting : vec4<f32>, // x: ambient, y: diffuse, z: sunHeight, w: unused
+        neon : vec4<f32>, // x: neonPulse, y: isNeonSign, z: unused, w: unused
       };
       @group(0) @binding(0) var<uniform> u : Uniforms;
       @group(0) @binding(1) var texSampler : sampler;
@@ -477,6 +493,7 @@ async function main() {
         let isTrafficLight = u.emissive.y > 0.5;
         let emissiveStrength = u.emissive.x;
         let isEmissive = u.emissive.z > 0.5; // Billboard/sign emissive flag
+        let isNeonSign = u.neon.y > 0.5;
 
         var lit : vec3<f32>;
 
@@ -487,6 +504,11 @@ async function main() {
           } else {
             lit = baseColor * 0.15;
           }
+        } else if (isNeonSign) {
+          // Neon signs with pulsing turquoise glow
+          let glow = u.neon.x; // Pulsing value 0-1
+          let turquoise = vec3(0.0, 0.9, 0.8);
+          lit = turquoise * (1.2 + glow * 1.0) + vec3(0.1, 0.3, 0.3) * glow;
         } else if (isEmissive) {
           // Billboards and neon signs - very bright, glow more at night
           let sunHeight = u.lighting.z;
@@ -660,7 +682,7 @@ async function main() {
   // Create uniform buffer and bind group for each mesh
   const meshData = model.meshes.map(mesh => {
     const uniformBuffer = device.createBuffer({
-      size: 64 * 4 + 32, // Added 16 bytes for time vec4 + 16 bytes for lighting vec4
+      size: 64 * 4 + 48, // Added 16 bytes for time vec4 + 16 bytes for lighting vec4 + 16 bytes for neon vec4
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     
@@ -849,6 +871,9 @@ async function main() {
     const lightState = getTrafficLightState(totalTime);
     const dayNightLighting = getDayNightLighting(timeOfDay);
 
+    // Neon pulse effect
+    const neonPulse = 0.5 + 0.5 * Math.sin(totalTime * 3.0);
+
     // Update rain
     if (rainEnabled) {
       updateRain(rain, dt);
@@ -858,7 +883,7 @@ async function main() {
 
     // Update mesh uniforms
     for (const { mesh, uniformBuffer } of meshData) {
-      const uniforms = new Float32Array(72); // Increased size for lighting vec4
+      const uniforms = new Float32Array(76); // Increased size for lighting vec4 + neon vec4
       uniforms.set(mvp, 0);
       uniforms.set(modelMat, 16);
       uniforms.set([...dayNightLighting.lightDir, 0], 32);
@@ -894,6 +919,10 @@ async function main() {
 
       // Add lighting parameters (ambient, diffuse, sunHeight)
       uniforms.set([dayNightLighting.ambient, dayNightLighting.diffuse, dayNightLighting.sunHeight, 0], 52);
+
+      // Add neon sign parameters
+      const isNeonSign = mesh.neonSign ? 1.0 : 0.0;
+      uniforms.set([neonPulse, isNeonSign, 0, 0], 56);
 
       device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     }
