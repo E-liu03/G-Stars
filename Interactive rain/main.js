@@ -104,19 +104,36 @@ function detectTrafficLightType(matName, hasTexture) {
   if (hasTexture) {
     return null;
   }
-  
+
   if (matName === 'Material.003') {
     return 'green';
   }
-  
+
   if (matName === 'Material.004') {
     return 'yellow';
   }
-  
+
   if (matName === 'Material.006') {
     return 'red';
   }
-  
+
+  return null;
+}
+
+// ============== EMISSIVE/NEON DETECTION ==============
+function detectEmissiveType(matName, hasTexture) {
+  // Apply to ALL textured materials (billboards, signs, etc.)
+  // This will make all billboards, posters, and signs glow
+  if (hasTexture) {
+    // Skip the flag - it has its own animation
+    if (matName.toLowerCase().includes('flag')) {
+      return null;
+    }
+
+    // Everything else with a texture gets the emissive treatment
+    return 'billboard';
+  }
+
   return null;
 }
 
@@ -267,10 +284,15 @@ async function loadOBJ(device, objUrl, mtlUrl) {
     
     const color = mat ? mat.Kd : defaultColor;
     const lightType = detectTrafficLightType(matName, hasTexture);
-    
+    const emissiveType = detectEmissiveType(matName, hasTexture);
+
     if (lightType) {
       trafficLightCount[lightType]++;
       console.log(`🚦 Traffic light (${lightType}): "${matName}"`);
+    }
+
+    if (emissiveType) {
+      console.log(`💡 Emissive ${emissiveType}: "${matName}"`);
     }
     
     const data = new Float32Array(group.vertices);
@@ -287,6 +309,7 @@ async function loadOBJ(device, objUrl, mtlUrl) {
       useTexture,
       name: matName,
       trafficLight: lightType,
+      emissiveType: emissiveType,
       baseColor: color,
     });
   }
@@ -390,6 +413,7 @@ async function main() {
         useTexture : vec4<f32>,
         emissive : vec4<f32>,
         time : vec4<f32>,
+        lighting : vec4<f32>, // x: ambient, y: diffuse, z: sunHeight, w: unused
       };
       @group(0) @binding(0) var<uniform> u : Uniforms;
       @group(0) @binding(1) var texSampler : sampler;
@@ -452,18 +476,32 @@ async function main() {
         
         let isTrafficLight = u.emissive.y > 0.5;
         let emissiveStrength = u.emissive.x;
-        
+        let isEmissive = u.emissive.z > 0.5; // Billboard/sign emissive flag
+
         var lit : vec3<f32>;
-        
+
         if (isTrafficLight) {
+          // Traffic lights
           if (emissiveStrength > 0.5) {
             lit = baseColor * 2.5 + vec3(0.3);
           } else {
             lit = baseColor * 0.15;
           }
+        } else if (isEmissive) {
+          // Billboards and neon signs - very bright, glow more at night
+          let sunHeight = u.lighting.z;
+          let nightAmount = max(0.0, -sunHeight); // 0 at day, 1 at night
+
+          // Much brighter base for all emissive objects
+          let baseBrightness = 2.5; // Increased from 1.5
+          // Huge extra glow at night
+          let nightGlow = nightAmount * 2.5; // Increased from 1.5
+
+          lit = baseColor * (baseBrightness + nightGlow);
         } else {
-          let ambient = 0.3;
-          let diffuse = max(dot(N, L), 0.0) * 0.55;
+          // Regular objects - use dynamic lighting from day/night cycle
+          let ambient = u.lighting.x;
+          let diffuse = max(dot(N, L), 0.0) * u.lighting.y;
           let specular = pow(max(dot(N, H), 0.0), 32.0) * 0.1;
           lit = baseColor * (ambient + diffuse) + vec3(specular);
         }
@@ -622,7 +660,7 @@ async function main() {
   // Create uniform buffer and bind group for each mesh
   const meshData = model.meshes.map(mesh => {
     const uniformBuffer = device.createBuffer({
-      size: 64 * 4 + 16, // Added 16 bytes for time vec4
+      size: 64 * 4 + 32, // Added 16 bytes for time vec4 + 16 bytes for lighting vec4
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     
@@ -669,9 +707,45 @@ async function main() {
   function dot(a,b) { return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
   function normalize(v) { const l=Math.sqrt(dot(v,v)); return [v[0]/l,v[1]/l,v[2]/l]; }
 
+  // Day/Night lighting helper
+  function getDayNightLighting(timeOfDay) {
+    // timeOfDay: 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset, 1.0 = midnight
+    const sunAngle = timeOfDay * Math.PI * 2;
+
+    // Sun height: -1 (below horizon) to 1 (directly above)
+    const sunHeight = Math.sin(sunAngle);
+
+    // Light direction (sun moving across sky)
+    const lightDir = [
+      Math.cos(sunAngle) * 0.5,
+      sunHeight,
+      Math.sin(sunAngle) * 0.3
+    ];
+
+    // Calculate lighting intensities based on sun position
+    let ambient, diffuse, skyColor;
+
+    // Smooth transition from day to night (no sunset colors)
+    // Map sunHeight from -1 to 1 into a smooth 0 to 1 transition
+    const dayAmount = Math.max(0, Math.min(1, (sunHeight + 0.3) / 1.3));
+
+    // Interpolate between night and day
+    ambient = 0.15 + dayAmount * 0.35; // 0.15 (night) to 0.5 (day)
+    diffuse = 0.15 + dayAmount * 0.6; // 0.15 (night) to 0.75 (day)
+
+    // Sky color: dark blue (night) to light blue (day)
+    skyColor = {
+      r: 0.03 + dayAmount * 0.17, // 0.03 to 0.20
+      g: 0.03 + dayAmount * 0.17, // 0.03 to 0.20
+      b: 0.06 + dayAmount * 0.24  // 0.06 to 0.30
+    };
+
+    return { lightDir, ambient, diffuse, skyColor, sunHeight };
+  }
+
   // Traffic light state
   let trafficLightMode = 'auto';
-  
+
   function getTrafficLightState(time) {
     if (trafficLightMode === 'green') {
       return { green: 1.0, yellow: 0.0, red: 0.0 };
@@ -698,6 +772,9 @@ async function main() {
   let camAngle = 0, camDist = 8, camHeight = 3, autoRotate = false;
   let rainEnabled = true;
   let flagWaveEnabled = false;
+  let timeOfDay = 0.5; // 0 = midnight, 0.5 = noon, 1.0 = midnight again
+  let dayNightCycleEnabled = false; // Start with manual control
+  let dayNightSpeed = 0.15; // Faster day/night cycle (was 0.05)
   
   const keys = {};
   window.addEventListener('keydown', e => { 
@@ -730,6 +807,12 @@ async function main() {
       flagWaveEnabled = !flagWaveEnabled;
       console.log(flagWaveEnabled ? '🎌 Flag wave: ON' : '🎌 Flag wave: OFF');
     }
+
+    // Toggle day/night cycle with C
+    if (e.key.toLowerCase() === 'c') {
+      dayNightCycleEnabled = !dayNightCycleEnabled;
+      console.log(dayNightCycleEnabled ? '🔄 Day/Night cycle: ON' : '🔄 Day/Night cycle: OFF');
+    }
   });
   window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
@@ -740,6 +823,11 @@ async function main() {
     const dt = (time - lastTime) / 1000;
     const totalTime = (time - startTime) / 1000;
     lastTime = time;
+
+    // Update day/night cycle
+    if (dayNightCycleEnabled) {
+      timeOfDay = (timeOfDay + dt * dayNightSpeed) % 1.0;
+    }
 
     if (keys['a']||keys['arrowleft']) camAngle -= dt*1.5;
     if (keys['d']||keys['arrowright']) camAngle += dt*1.5;
@@ -759,6 +847,7 @@ async function main() {
     const modelMat = createIdentity();
 
     const lightState = getTrafficLightState(totalTime);
+    const dayNightLighting = getDayNightLighting(timeOfDay);
 
     // Update rain
     if (rainEnabled) {
@@ -769,15 +858,16 @@ async function main() {
 
     // Update mesh uniforms
     for (const { mesh, uniformBuffer } of meshData) {
-      const uniforms = new Float32Array(68); // Increased size for time parameter
+      const uniforms = new Float32Array(72); // Increased size for lighting vec4
       uniforms.set(mvp, 0);
       uniforms.set(modelMat, 16);
-      uniforms.set([0.4, 0.7, 0.5, 0], 32);
+      uniforms.set([...dayNightLighting.lightDir, 0], 32);
       uniforms.set([camX, camY, camZ, 1], 36);
       uniforms.set([mesh.useTexture, 0, 0, 0], 40);
 
       let emissive = 0;
       let isTrafficLight = 0;
+      let isEmissive = 0;
 
       if (mesh.trafficLight) {
         isTrafficLight = 1;
@@ -790,12 +880,20 @@ async function main() {
         }
       }
 
-      uniforms.set([emissive, isTrafficLight, 0, 0], 44);
+      // Check if this is an emissive billboard/sign
+      if (mesh.emissiveType) {
+        isEmissive = 1;
+      }
+
+      uniforms.set([emissive, isTrafficLight, isEmissive, 0], 44);
 
       // Add time parameter, flag identifier, and wave enabled flag
       const isFlag = mesh.name && mesh.name.toLowerCase().includes('flag') ? 1.0 : 0.0;
       const waveEnabled = flagWaveEnabled ? 1.0 : 0.0;
       uniforms.set([totalTime, isFlag, waveEnabled, 0], 48);
+
+      // Add lighting parameters (ambient, diffuse, sunHeight)
+      uniforms.set([dayNightLighting.ambient, dayNightLighting.diffuse, dayNightLighting.sunHeight, 0], 52);
 
       device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     }
@@ -804,7 +902,12 @@ async function main() {
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
         view: context.getCurrentTexture().createView(),
-        clearValue: rainEnabled ? { r:0.03, g:0.03, b:0.06, a:1 } : { r:0.05, g:0.05, b:0.08, a:1 },
+        clearValue: {
+          r: dayNightLighting.skyColor.r,
+          g: dayNightLighting.skyColor.g,
+          b: dayNightLighting.skyColor.b,
+          a: 1
+        },
         loadOp: "clear", storeOp: "store",
       }],
       depthStencilAttachment: {
@@ -843,6 +946,7 @@ async function main() {
   console.log("🚦 G: Green light | Y: Yellow | R: Red | T: Auto");
   console.log("🌧️ P: Toggle rain");
   console.log("🎌 F: Toggle flag wave");
+  console.log("🔄 C: Toggle day/night cycle");
   
   requestAnimationFrame(frame);
 }
