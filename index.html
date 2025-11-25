@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Diorama - WebGPU Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            max-width: 300px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        #controls h2 {
+            margin-bottom: 15px;
+            color: #4fc3f7;
+            font-size: 18px;
+        }
+
+        #controls p {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+
+        #controls kbd {
+            background: #333;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            border: 1px solid #555;
+        }
+
+        #stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 12px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 30px 50px;
+            border-radius: 15px;
+            font-size: 20px;
+            z-index: 2000;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto 0;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: #ff5252;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="gpuCanvas"></canvas>
+
+        <div id="loading">
+            <div>Loading Diorama...</div>
+            <div class="spinner"></div>
+        </div>
+
+        <div id="controls">
+            <h2>Interactive Controls</h2>
+            <p><kbd>W/S</kbd> Move Forward/Back</p>
+            <p><kbd>A/D</kbd> Move Left/Right</p>
+            <p><kbd>Q/E</kbd> Move Up/Down</p>
+            <p><kbd>Arrow Keys</kbd> Rotate Camera</p>
+            <p><kbd>1</kbd> Toggle Directional Light</p>
+            <p><kbd>2</kbd> Toggle Point Light</p>
+            <p><kbd>3</kbd> Cycle Shading Modes</p>
+            <p><kbd>R</kbd> Reset Camera</p>
+            <p><kbd>+/-</kbd> Adjust Light Intensity</p>
+        </div>
+
+        <div id="stats">
+            <div id="fps">FPS: 0</div>
+            <div id="vertices">Vertices: 0</div>
+            <div id="triangles">Triangles: 0</div>
+            <div id="materials">Materials: 0</div>
+            <div id="cameraPos">Camera: (0, 0, 0)</div>
+        </div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>
