@@ -127,7 +127,7 @@ function detectTrafficLightType(matName, hasTexture) {
 }
 
 // ============== VENDING MACHINE BUTTON DETECTION ================
-const vendingButtonMaterials = new Set(['material.042',]);
+const vendingButtonMaterials = new Set(['Material.042',]);
 
 function isVendingButtonMaterial(matName){
   return vendingButtonMaterials.has(matName);
