@@ -389,6 +389,7 @@ async function main() {
         cameraPos : vec4<f32>,
         useTexture : vec4<f32>,
         emissive : vec4<f32>,
+        time : vec4<f32>,
       };
       @group(0) @binding(0) var<uniform> u : Uniforms;
       @group(0) @binding(1) var texSampler : sampler;
@@ -405,9 +406,32 @@ async function main() {
       @vertex
       fn vs(@location(0) pos : vec3<f32>, @location(1) norm : vec3<f32>, @location(2) uv : vec2<f32>, @location(3) color : vec3<f32>) -> VSOut {
         var out : VSOut;
-        out.pos = u.mvp * vec4(pos, 1.0);
+        var animatedPos = pos;
+
+        // Flag wave animation - based on UV coordinates
+        // u.time.y is a flag identifier (1.0 for flag material)
+        // u.time.z is wave enabled (1.0 for enabled, 0.0 for disabled)
+        if (u.time.y > 0.5 && u.time.z > 0.5) {
+          let time = u.time.x;
+
+          // Flag attached at BOTTOM (uv.y = 1), free edge at TOP (uv.y = 0)
+          // Cubic falloff makes the free edge wave more than the pole
+          let waveAmount = (1.0 - uv.y) * (1.0 - uv.y) * (1.0 - uv.y);
+
+          // Waves propagate up the flag - reduced amplitude for subtlety
+          let wave1 = sin(time * 2.5 + (1.0 - uv.y) * 6.0) * 0.04;
+          let wave2 = sin(time * 1.8 + (1.0 - uv.y) * 4.0 + uv.x * 2.0) * 0.025;
+
+          // Apply HORIZONTAL displacement (X-axis for side-to-side flutter)
+          animatedPos.x += (wave1 + wave2) * waveAmount;
+
+          // Tiny Z motion for depth/realism
+          animatedPos.z += wave2 * 0.15 * waveAmount;
+        }
+
+        out.pos = u.mvp * vec4(animatedPos, 1.0);
         out.normal = (u.model * vec4(norm, 0.0)).xyz;
-        out.worldPos = (u.model * vec4(pos, 1.0)).xyz;
+        out.worldPos = (u.model * vec4(animatedPos, 1.0)).xyz;
         out.uv = uv;
         out.color = color;
         return out;
@@ -598,7 +622,7 @@ async function main() {
   // Create uniform buffer and bind group for each mesh
   const meshData = model.meshes.map(mesh => {
     const uniformBuffer = device.createBuffer({
-      size: 64 * 4,
+      size: 64 * 4 + 16, // Added 16 bytes for time vec4
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     
@@ -673,6 +697,7 @@ async function main() {
 
   let camAngle = 0, camDist = 8, camHeight = 3, autoRotate = false;
   let rainEnabled = true;
+  let flagWaveEnabled = false;
   
   const keys = {};
   window.addEventListener('keydown', e => { 
@@ -698,6 +723,12 @@ async function main() {
     if (e.key.toLowerCase() === 'p') {
       rainEnabled = !rainEnabled;
       console.log(rainEnabled ? '🌧️ Rain: ON' : '☀️ Rain: OFF');
+    }
+
+    // Flag wave toggle
+    if (e.key.toLowerCase() === 'f') {
+      flagWaveEnabled = !flagWaveEnabled;
+      console.log(flagWaveEnabled ? '🎌 Flag wave: ON' : '🎌 Flag wave: OFF');
     }
   });
   window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
@@ -738,16 +769,16 @@ async function main() {
 
     // Update mesh uniforms
     for (const { mesh, uniformBuffer } of meshData) {
-      const uniforms = new Float32Array(64);
+      const uniforms = new Float32Array(68); // Increased size for time parameter
       uniforms.set(mvp, 0);
       uniforms.set(modelMat, 16);
       uniforms.set([0.4, 0.7, 0.5, 0], 32);
       uniforms.set([camX, camY, camZ, 1], 36);
       uniforms.set([mesh.useTexture, 0, 0, 0], 40);
-      
+
       let emissive = 0;
       let isTrafficLight = 0;
-      
+
       if (mesh.trafficLight) {
         isTrafficLight = 1;
         if (mesh.trafficLight === 'red') {
@@ -758,9 +789,14 @@ async function main() {
           emissive = lightState.green;
         }
       }
-      
+
       uniforms.set([emissive, isTrafficLight, 0, 0], 44);
-      
+
+      // Add time parameter, flag identifier, and wave enabled flag
+      const isFlag = mesh.name && mesh.name.toLowerCase().includes('flag') ? 1.0 : 0.0;
+      const waveEnabled = flagWaveEnabled ? 1.0 : 0.0;
+      uniforms.set([totalTime, isFlag, waveEnabled, 0], 48);
+
       device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     }
 
@@ -806,6 +842,7 @@ async function main() {
   console.log("Space: Toggle auto-rotate");
   console.log("🚦 G: Green light | Y: Yellow | R: Red | T: Auto");
   console.log("🌧️ P: Toggle rain");
+  console.log("🎌 F: Toggle flag wave");
   
   requestAnimationFrame(frame);
 }
