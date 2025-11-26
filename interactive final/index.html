@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- 
+    ============================================================
+    渋谷 Shibuya Diorama - WebGPU 3D Scene Viewer
+    ============================================================
+    
+    A WebGPU-powered 3D diorama of Shibuya, Tokyo featuring:
+    - Interactive camera controls
+    - Traffic light animation
+    - Rain particle effects
+    - Neon sign glow
+    - Billboard spotlights
+    - Flag wave animation
+    - Day/night cycle
+    
+    ============================================================
+  -->
+  <title>渋谷 Shibuya Diorama</title>
+  
+  <style>
+    /* ============================================================
+       GLOBAL STYLES
+       ============================================================ */
+    
+    /* Main body layout - flexbox row with controls on left, canvas on right */
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: row;          /* Side-by-side layout */
+      align-items: flex-start;      /* Align items to top */
+      justify-content: center;      /* Center horizontally */
+      min-height: 100vh;            /* Full viewport height */
+      
+      /* Background: dimmed imagewrap.jpg with 40% dark overlay */
+      background: 
+        linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)),
+        url('textures/imagewrap.jpg') center center / cover no-repeat fixed;
+      
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: white;
+      padding: 20px;
+      gap: 20px;                    /* Space between left panel and main content */
+    }
+    
+    /* ============================================================
+       LEFT PANEL - Controls Container
+       ============================================================ */
+    
+    /* Container for all control groups on the left side */
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-top: 40px;            /* Align with canvas top */
+    }
+    
+    /* ============================================================
+       MAIN CONTENT - Title and Canvas
+       ============================================================ */
+    
+    /* Container for title and WebGPU canvas */
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    /* Page title styling */
+    h1 {
+      margin-bottom: 15px;
+      font-weight: 300;             /* Light weight for elegance */
+      letter-spacing: 2px;          /* Spaced out letters */
+    }
+    
+    /* WebGPU rendering canvas */
+    canvas {
+      border: 2px solid #4a4a6a;    /* Purple-gray border */
+      border-radius: 8px;           /* Rounded corners */
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);  /* Drop shadow for depth */
+    }
+    
+    /* ============================================================
+       CONTROLS - Container and Groups
+       ============================================================ */
+    
+    /* Vertical stack of control groups */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    /* Individual control group box */
+    .control-group {
+      background: rgba(255,255,255,0.1);  /* Semi-transparent white */
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+    
+    /* Control group header/label */
+    .control-group h3 {
+      margin: 0 0 6px 0;
+      font-size: 14px;
+      font-weight: bold;
+      color: white;
+      
+      /* Black outline effect using text-shadow on all 4 corners */
+      text-shadow: 
+        -1px -1px 0 #000,
+        1px -1px 0 #000,
+        -1px 1px 0 #000,
+        1px 1px 0 #000;
+      
+      text-transform: uppercase;    /* ALL CAPS for labels */
+    }
+    
+    /* ============================================================
+       KEY BUTTONS - Keyboard Key Indicators
+       ============================================================ */
+    
+    /* Base style for keyboard key indicators */
+    .key {
+      display: inline-block;
+      background: #333;             /* Dark gray background */
+      padding: 5px 10px;
+      border-radius: 4px;
+      margin: 2px;
+      font-size: 16px;
+      font-weight: bold;
+      color: white;
+      
+      /* Black outline effect for readability */
+      text-shadow: 
+        -1px -1px 0 #000,
+        1px -1px 0 #000,
+        -1px 1px 0 #000,
+        1px 1px 0 #000;
+      
+      border: 1px solid #555;
+    }
+    
+    /* ============================================================
+       KEY BUTTON COLOR VARIANTS
+       Each control type has its own color scheme
+       ============================================================ */
+    
+    /* Traffic light controls */
+    .key.green { background: #2d5a27; border-color: #4a9; }   /* Green light */
+    .key.yellow { background: #8a7a20; border-color: #cc0; }  /* Yellow light */
+    .key.red { background: #6a2020; border-color: #c44; }     /* Red light */
+    .key.auto { background: #2a4a6a; border-color: #48c; }    /* Auto cycle */
+    
+    /* Effect toggles */
+    .key.rain { background: #2a4a5a; border-color: #6af; }    /* Rain toggle (blue) */
+    .key.neon { background: #2a3a6a; border-color: #66f; }    /* Neon signs (purple) */
+    .key.lamp { background: #5a4a2a; border-color: #fa6; }    /* Billboard lights (orange) */
+    .key.flag { background: #6a2a4a; border-color: #f6a; }    /* Flag wave (pink) */
+    .key.cycle { background: #3a5a4a; border-color: #6fa; }   /* Day/night cycle (teal) */
+  </style>
+</head>
+
+<body>
+  <!-- ============================================================
+       LEFT PANEL - Keyboard Controls Reference
+       ============================================================ -->
+  <div class="left-panel">
+    <div class="controls">
+      
+      <!-- Camera rotation: A = left, D = right -->
+      <div class="control-group">
+        <h3>Camera Rotate</h3>
+        <span class="key">A</span>
+        <span class="key">D</span>
+      </div>
+      
+      <!-- Camera zoom: W = in, S = out -->
+      <div class="control-group">
+        <h3>Zoom</h3>
+        <span class="key">W</span>
+        <span class="key">S</span>
+      </div>
+      
+      <!-- Camera height: Q = up, E = down -->
+      <div class="control-group">
+        <h3>Height</h3>
+        <span class="key">Q</span>
+        <span class="key">E</span>
+      </div>
+      
+      <!-- Toggle automatic camera rotation -->
+      <div class="control-group">
+        <h3>Auto-rotate</h3>
+        <span class="key">Space</span>
+      </div>
+      
+      <!-- Traffic light manual control and auto-cycle -->
+      <div class="control-group">
+        <h3>🚦 Traffic Lights</h3>
+        <span class="key green">G</span>   <!-- Force green -->
+        <span class="key yellow">Y</span>  <!-- Force yellow -->
+        <span class="key red">R</span>     <!-- Force red -->
+        <span class="key auto">T</span>    <!-- Auto cycle mode -->
+      </div>
+      
+      <!-- Toggle rain particle effect -->
+      <div class="control-group">
+        <h3>🌧️ Weather</h3>
+        <span class="key rain">P</span>
+      </div>
+      
+      <!-- Toggle neon sign glow effect -->
+      <div class="control-group">
+        <h3>💡 Neon</h3>
+        <span class="key neon">N</span>
+      </div>
+      
+      <!-- Toggle billboard spotlight illumination -->
+      <div class="control-group">
+        <h3>🔦 Billboard</h3>
+        <span class="key lamp">L</span>
+      </div>
+      
+      <!-- Toggle Japanese flag wave animation -->
+      <div class="control-group">
+        <h3>🎌 Flag Wave</h3>
+        <span class="key flag">F</span>
+      </div>
+      
+      <!-- Toggle day/night lighting cycle -->
+      <div class="control-group">
+        <h3>🔄 Day/Night</h3>
+        <span class="key cycle">C</span>
+      </div>
+      
+    </div>
+  </div>
+  
+  <!-- ============================================================
+       MAIN CONTENT - Title and WebGPU Canvas
+       ============================================================ -->
+  <div class="main-content">
+    <!-- Page title with Japanese and English text -->
+    <h1>渋谷 SHIBUYA DIORAMA</h1>
+    
+    <!-- WebGPU rendering canvas (900x600 pixels) -->
+    <canvas id="gfx-main" width="900" height="600"></canvas>
+  </div>
+  
+  <!-- Main WebGPU application script -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
