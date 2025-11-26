@@ -51,9 +51,7 @@ async function main() {
   const format = navigator.gpu.getPreferredCanvasFormat();
   context.configure({ device, format, alphaMode: "opaque" });
 
-  // ==========================================================================
-  // SHADER SETUP
-  // ==========================================================================
+  // Shader setup
 
   const shaderModule = device.createShaderModule({ code: mainShaderCode });
   const rainShaderModule = device.createShaderModule({ code: rainShaderCode });
@@ -68,9 +66,7 @@ async function main() {
   device.queue.writeBuffer(skyboxBuffer, 0, skyboxVertices);
   const skyboxVertexCount = skyboxVertices.length / 5;  // 5 floats per vertex
 
-  // ==========================================================================
-  // PIPELINE SETUP
-  // ==========================================================================
+  // Pipeline setup
 
   // Main scene bind group layout - defines what resources the shader can access
   const bindGroupLayout = device.createBindGroupLayout({
@@ -220,9 +216,7 @@ async function main() {
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
   });
 
-  // ==========================================================================
-  // LOAD RESOURCES
-  // ==========================================================================
+  // Load resources
 
   console.log("=== Loading Shibuya Diorama ===");
   const model = await loadOBJ(device, "Shibuya-Diorama.obj", "Shibuya-Diorama.mtl");
@@ -272,15 +266,11 @@ async function main() {
     return { mesh, uniformBuffer, bindGroup };
   });
 
-  // ==========================================================================
-  // INITIALIZE INPUT HANDLERS
-  // ==========================================================================
+  // Initialize input handlers
 
   initInputHandlers();
 
-  // ==========================================================================
-  // START APPLICATION
-  // ==========================================================================
+  // Start application
 
   // Log controls to console
   console.log("=== Controls ===");
