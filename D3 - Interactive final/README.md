@@ -3,7 +3,10 @@
 
 ## Video Demonstration
 
-[ADD YOUTUBE/GOOGLE DRIVE LINK HERE]
+
+(https://www.youtube.com/watch?v=wp7yQsMi4rU)
+
+https://drive.google.com/file/d/1UQw0uZ5PIdYUqrB5iOPEDtQuLwJ2aRG4/view?usp=drive_link
 
 ---
 
@@ -159,11 +162,13 @@ Then open your browser to: `http://localhost:8000`
 
 ## References
 
-[ADD RELEVANT TUTORIAL/REFERENCE LINKS HERE]
-
-- WebGPU Tutorial: [LINK]
-- OBJ Parser Reference: [LINK]
-- Rain Particle System: [LINK]
+Model Loading - https://sotrh.github.io/learn-wgpu/beginner/tutorial9-models/#accessing-files-in-the-res-folder
+Vertex Buffers - https://www.youtube.com/watch?v=X2taVY4jRSg&list=PLn3eTxaOtL2Ns3wkxdyS3CiqkJuwQdZzn&index=8
+Textures - https://www.youtube.com/watch?v=QubvRWJHTCA&list=PLn3eTxaOtL2Ns3wkxdyS3CiqkJuwQdZzn&index=10
+Object Loading - https://www.youtube.com/watch?v=uUQfMGcdBbs&list=PLn3eTxaOtL2Ns3wkxdyS3CiqkJuwQdZzn&index=16
+Transformations - https://www.youtube.com/watch?v=Ny0EuH1dlrM&list=PLn3eTxaOtL2Ns3wkxdyS3CiqkJuwQdZzn&index=9
+Advanced Graphics - https://www.youtube.com/watch?v=KTFFdZSDiTU
+3D Sphere with lighting - https://www.youtube.com/watch?v=SjBJKHhNJpM
 
 ---
 
