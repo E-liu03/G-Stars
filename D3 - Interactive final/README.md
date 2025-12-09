@@ -1,8 +1,11 @@
 # G-Stars - Interactive Shibuya Diorama
 **F20GA Computer Graphics - Task 3: Interactive WebGPU Visualizer**
 
-## Video Demonstration
+## 3D Diorama Prototype Demonstration
 
+Youtube: https://youtu.be/COkZaI9rueA
+
+## Video Explaination
 
 (https://www.youtube.com/watch?v=wp7yQsMi4rU)
 
